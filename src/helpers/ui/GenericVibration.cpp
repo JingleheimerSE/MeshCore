@@ -5,15 +5,27 @@ void GenericVibration::begin() {
   pinMode(PIN_VIBRATION, OUTPUT);
   digitalWrite(PIN_VIBRATION, LOW);
   duration = 0;
+  _find_active = false;
+  _find_phase_origin = 0;
 }
 
 void GenericVibration::trigger() {
+  if (_find_active) return;
   duration = millis();
   digitalWrite(PIN_VIBRATION, HIGH);
 }
 
 void GenericVibration::loop() {
-  if (isVibrating()) {
+  if (_find_active) {
+    if (((millis() - _find_phase_origin) / 1000) % 2 == 0) {
+      digitalWrite(PIN_VIBRATION, HIGH);
+    } else {
+      digitalWrite(PIN_VIBRATION, LOW);
+    }
+    return;
+  }
+
+  if (duration > 0) {
     if ((millis() / 1000) % 2 == 0) {
       digitalWrite(PIN_VIBRATION, LOW);
     } else {
@@ -27,12 +39,24 @@ void GenericVibration::loop() {
 }
 
 bool GenericVibration::isVibrating() {
-  return duration > 0;
+  return _find_active || duration > 0;
 }
 
 void GenericVibration::stop() {
   duration = 0;
   digitalWrite(PIN_VIBRATION, LOW);
+}
+
+void GenericVibration::startFind() {
+  duration = 0;
+  _find_active = true;
+  _find_phase_origin = millis();
+  digitalWrite(PIN_VIBRATION, HIGH);
+}
+
+void GenericVibration::stopFind() {
+  _find_active = false;
+  stop();
 }
 
 #endif // ifdef PIN_VIBRATION

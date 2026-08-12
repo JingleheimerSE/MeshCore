@@ -62,9 +62,7 @@ void UITask::begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* no
   sprintf(_version_info, "%s (%s)", version, FIRMWARE_BUILD_DATE);
 
 #ifdef PIN_BUZZER
-  buzzer.begin();
-  buzzer.quiet(_node_prefs->buzzer_quiet);
-  buzzer.startup();
+  _alerts->buzzer().startup();
 #endif
 
 #ifdef HAS_DRV2605
@@ -107,13 +105,13 @@ void UITask::notify(UIEventType t) {
 switch(t){
   case UIEventType::contactMessage:
     // gemini's pick
-    buzzer.play("MsgRcv3:d=4,o=6,b=200:32e,32g,32b,16c7");
+    _alerts->buzzer().play("MsgRcv3:d=4,o=6,b=200:32e,32g,32b,16c7");
     break;
   case UIEventType::channelMessage:
-    buzzer.play("kerplop:d=16,o=6,b=120:32g#,32c#");
+    _alerts->buzzer().play("kerplop:d=16,o=6,b=120:32g#,32c#");
     break;
   case UIEventType::ack:
-    buzzer.play("ack:d=32,o=8,b=120:c");
+    _alerts->buzzer().play("ack:d=32,o=8,b=120:c");
     break;
   case UIEventType::roomMessage:
   case UIEventType::newContactMessage:
@@ -418,10 +416,10 @@ void UITask::shutdown(bool restart){
      or we can set a flag and delay the shutdown for a couple of seconds
      while a non-blocking buzzer.loop() plays out in UITask::loop()
   */
-  buzzer.shutdown();
+  _alerts->buzzer().shutdown();
   uint32_t buzzer_timer = millis(); // fail-safe shutdown
-  while (buzzer.isPlaying() && (millis() - 2500) < buzzer_timer)
-    buzzer.loop();
+  while (_alerts->buzzer().isPlaying() && (millis() - 2500) < buzzer_timer)
+    _alerts->buzzer().loop();
 
   #endif // PIN_BUZZER
 
@@ -445,10 +443,6 @@ void UITask::loop() {
     }
   #endif
   userLedHandler();
-
-#ifdef PIN_BUZZER
-  if (buzzer.isPlaying())  buzzer.loop();
-#endif
 
   if (_display != NULL && _display->isOn()) {
     static bool _firstBoot = true;
@@ -488,6 +482,13 @@ void UITask::handleButtonAnyPress() {
       _display->turnOn();
     }
     _auto_off = millis() + AUTO_OFF_MILLIS;   // extend auto-off timer
+  }
+
+  // any press cancels an active find pattern immediately -- under
+  // "I found it, make it stop" pressure, it shouldn't need a specific
+  // click count.
+  if (_alerts->findManager().isActive()) {
+    _alerts->findManager().stop();
   }
 }
 
@@ -534,7 +535,7 @@ void UITask::handleButtonTriplePress() {
   mode = (mode + 1) & 3;
   _node_prefs->buzzer_quiet = (mode & 2) ? 1 : 0;
   _node_prefs->vibe_quiet = (mode & 1) ? 1 : 0;
-  buzzer.quiet(_node_prefs->buzzer_quiet);
+  _alerts->buzzer().quiet(_node_prefs->buzzer_quiet);
   vibration.quiet(_node_prefs->vibe_quiet);
   // audible/tactile confirmation of the new mode (no screen on some boards)
   if (!_node_prefs->buzzer_quiet) notify(UIEventType::ack);
@@ -548,15 +549,15 @@ void UITask::handleButtonTriplePress() {
   the_mesh.savePrefs();
   _need_refresh = true;
 #elif defined(PIN_BUZZER)
-    if (buzzer.isQuiet()) {
-      buzzer.quiet(false);
+    if (_alerts->buzzer().isQuiet()) {
+      _alerts->buzzer().quiet(false);
       notify(UIEventType::ack);
       sprintf(_alert, "Buzzer: ON");
     } else {
-      buzzer.quiet(true);
+      _alerts->buzzer().quiet(true);
       sprintf(_alert, "Buzzer: OFF");
     }
-    _node_prefs->buzzer_quiet = buzzer.isQuiet();
+    _node_prefs->buzzer_quiet = _alerts->buzzer().isQuiet();
     the_mesh.savePrefs();
     _need_refresh = true;
 #endif

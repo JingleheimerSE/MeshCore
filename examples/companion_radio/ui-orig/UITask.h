@@ -5,11 +5,8 @@
 #include <helpers/SensorManager.h>
 #include <stddef.h>
 
-#ifdef PIN_BUZZER
-  #include <helpers/ui/buzzer.h>
-#endif
-
 #include "../AbstractUITask.h"
+#include "../DeviceAlerts.h"
 #include "../NodePrefs.h"
 
 #include "Button.h"
@@ -19,11 +16,9 @@
 #endif
 
 class UITask : public AbstractUITask {
+  DeviceAlerts* _alerts;
   DisplayDriver* _display;
   SensorManager* _sensors;
-#ifdef PIN_BUZZER
-  genericBuzzer buzzer;
-#endif
 #ifdef HAS_DRV2605
   DRV2605Vibration vibration;
 #endif
@@ -61,7 +56,8 @@ class UITask : public AbstractUITask {
  
 public:
 
-  UITask(mesh::MainBoard* board, MultiSerialInterface* serial) : AbstractUITask(board, serial), _display(NULL), _sensors(NULL) {
+  UITask(mesh::MainBoard* board, MultiSerialInterface* serial, DeviceAlerts* alerts)
+      : AbstractUITask(board, serial), _alerts(alerts), _display(NULL), _sensors(NULL) {
       _next_refresh = 0;
       ui_started_at = 0;
   }

@@ -451,13 +451,7 @@ void UITask::begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* no
 
 
 #ifdef PIN_BUZZER
-  buzzer.begin();
-  buzzer.quiet(_node_prefs->buzzer_quiet);
-  buzzer.startup();
-#endif
-
-#ifdef PIN_VIBRATION
-  vibration.begin();
+  _alerts->buzzer().startup();
 #endif
 
   ui_started_at = millis();
@@ -478,13 +472,13 @@ void UITask::notify(UIEventType t) {
 switch(t){
   case UIEventType::contactMessage:
     // gemini's pick
-    buzzer.play("MsgRcv3:d=4,o=6,b=200:32e,32g,32b,16c7");
+    _alerts->buzzer().play("MsgRcv3:d=4,o=6,b=200:32e,32g,32b,16c7");
     break;
   case UIEventType::channelMessage:
-    buzzer.play("kerplop:d=16,o=6,b=120:32g#,32c#");
+    _alerts->buzzer().play("kerplop:d=16,o=6,b=120:32g#,32c#");
     break;
   case UIEventType::ack:
-    buzzer.play("ack:d=32,o=8,b=120:c");
+    _alerts->buzzer().play("ack:d=32,o=8,b=120:c");
     break;
   case UIEventType::roomMessage:
   case UIEventType::newContactMessage:
@@ -497,7 +491,7 @@ switch(t){
 #ifdef PIN_VIBRATION
   // Trigger vibration for all UI events except none
   if (t != UIEventType::none) {
-    vibration.trigger();
+    _alerts->vibration().trigger();
   }
 #endif
 }
@@ -561,10 +555,10 @@ void UITask::shutdown(bool restart){
      or we can set a flag and delay the shutdown for a couple of seconds
      while a non-blocking buzzer.loop() plays out in UITask::loop()
   */
-  buzzer.shutdown();
+  _alerts->buzzer().shutdown();
   uint32_t buzzer_timer = millis(); // fail-safe shutdown
-  while (buzzer.isPlaying() && (millis() - 2500) < buzzer_timer)
-    buzzer.loop();
+  while (_alerts->buzzer().isPlaying() && (millis() - 2500) < buzzer_timer)
+    _alerts->buzzer().loop();
 
   #endif // PIN_BUZZER
 
@@ -665,9 +659,12 @@ void UITask::loop() {
 
   userLedHandler();
 
-#ifdef PIN_BUZZER
-  if (buzzer.isPlaying())  buzzer.loop();
-#endif
+  // a raw button press cancels an active find pattern immediately, regardless
+  // of the click-type classification above -- under "I found it, make it
+  // stop" pressure, any press should work.
+  if (_alerts->findManager().isActive() && isButtonPressed()) {
+    _alerts->findManager().stop();
+  }
 
   if (curr) curr->poll();
 
@@ -722,10 +719,6 @@ void UITask::loop() {
     }
 #endif
   }
-
-#ifdef PIN_VIBRATION
-  vibration.loop();
-#endif
 
 #ifdef AUTO_SHUTDOWN_MILLIVOLTS
   if (millis() > next_batt_chck) {
@@ -827,15 +820,15 @@ void UITask::toggleGPS() {
 void UITask::toggleBuzzer() {
     // Toggle buzzer quiet mode
   #ifdef PIN_BUZZER
-    if (buzzer.isQuiet()) {
-      buzzer.quiet(false);
+    if (_alerts->buzzer().isQuiet()) {
+      _alerts->buzzer().quiet(false);
       notify(UIEventType::ack);
     } else {
-      buzzer.quiet(true);
+      _alerts->buzzer().quiet(true);
     }
-    _node_prefs->buzzer_quiet = buzzer.isQuiet();
+    _node_prefs->buzzer_quiet = _alerts->buzzer().isQuiet();
     the_mesh.savePrefs();
-    showAlert(buzzer.isQuiet() ? "Buzzer: OFF" : "Buzzer: ON", 800);
+    showAlert(_alerts->buzzer().isQuiet() ? "Buzzer: OFF" : "Buzzer: ON", 800);
     _next_refresh = 0;  // trigger refresh
   #endif
 }

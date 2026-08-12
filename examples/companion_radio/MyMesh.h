@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <Mesh.h>
+#include <helpers/ui/FindManager.h>
 #include "AbstractUITask.h"
 
 /*------------ Frame Protocol --------------*/
@@ -84,9 +85,10 @@ struct AdvertPath {
   uint8_t path[MAX_PATH_SIZE];
 };
 
-class MyMesh : public BaseChatMesh, public DataStoreHost {
+class MyMesh : public BaseChatMesh, public DataStoreHost, public FindStateListener {
 public:
-  MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMeshTables &tables, DataStore& store, AbstractUITask* ui=NULL);
+  MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMeshTables &tables, DataStore& store,
+         FindManager& find_manager, AbstractUITask* ui=NULL);
 
   void begin(bool has_display);
   void startInterface(BaseSerialInterface &serial);
@@ -98,6 +100,7 @@ public:
   void loop();
   void handleCmdFrame(size_t len);
   bool advert();
+  void onFindStateChanged(bool active) override;
   void enterCLIRescue();
 
   int  getRecentlyHeard(AdvertPath dest[], int max_num);
@@ -216,6 +219,7 @@ private:
   uint32_t pending_req;   // pending _BINARY_REQ
   BaseSerialInterface *_serial;
   AbstractUITask* _ui;
+  FindManager* _find_manager;
 
   ContactsIterator _iter;
   uint32_t _iter_filter_since;

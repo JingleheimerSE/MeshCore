@@ -1,6 +1,7 @@
 #include <Arduino.h>   // needed for PlatformIO
 #include <Mesh.h>
 #include "MyMesh.h"
+#include "DeviceAlerts.h"
 
 // Believe it or not, this std C function is busted on some platforms!
 static uint32_t _atoi(const char* sp) {
@@ -88,14 +89,15 @@ MultiSerialInterface interface_manager;
 #endif
 
 /* GLOBAL OBJECTS */
+DeviceAlerts device_alerts;
 #ifdef DISPLAY_CLASS
   #include "UITask.h"
-  UITask ui_task(&board, &interface_manager);
+  UITask ui_task(&board, &interface_manager, &device_alerts);
 #endif
 
 StdRNG fast_rng;
 SimpleMeshTables tables;
-MyMesh the_mesh(radio_driver, fast_rng, rtc_clock, tables, store
+MyMesh the_mesh(radio_driver, fast_rng, rtc_clock, tables, store, device_alerts.findManager()
    #ifdef DISPLAY_CLASS
       , &ui_task
    #endif
@@ -231,6 +233,7 @@ void setup() {
 #endif
 
   the_mesh.startInterface(interface_manager);
+  device_alerts.begin(the_mesh.getNodePrefs()->buzzer_quiet);
   sensors.begin();
 
 #if ENV_INCLUDE_GPS == 1
@@ -247,6 +250,7 @@ void setup() {
 void loop() {
   the_mesh.loop();
   interface_manager.loop();
+  device_alerts.loop();
   sensors.loop();
 #ifdef DISPLAY_CLASS
   ui_task.loop();

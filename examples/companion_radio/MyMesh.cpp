@@ -62,6 +62,11 @@
 #define CMD_SET_DEFAULT_FLOOD_SCOPE   63
 #define CMD_GET_DEFAULT_FLOOD_SCOPE   64
 #define CMD_SEND_RAW_PACKET           65
+#define CMD_TRIGGER_FIND              66
+#define CMD_STOP_FIND                 67
+
+// Device capability bits, appended to RESP_CODE_DEVICE_INFO (v11+)
+#define DEVICE_CAP_FIND               0x01
 
 // Stats sub-types for CMD_GET_STATS
 #define STATS_TYPE_CORE               0
@@ -126,6 +131,7 @@
 #define PUSH_CODE_CONTROL_DATA          0x8E   // v8+
 #define PUSH_CODE_CONTACT_DELETED       0x8F // used to notify client app of deleted contact when overwriting oldest
 #define PUSH_CODE_CONTACTS_FULL         0x90 // used to notify client app that contacts storage is full
+#define PUSH_CODE_FIND_STATE            0x91
 
 #define ERR_CODE_UNSUPPORTED_CMD        1
 #define ERR_CODE_NOT_FOUND              2
@@ -860,9 +866,11 @@ uint32_t MyMesh::calcDirectTimeoutMillisFor(uint32_t pkt_airtime_millis, uint8_t
 
 void MyMesh::onSendTimeout() {}
 
-MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMeshTables &tables, DataStore& store, AbstractUITask* ui)
+MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMeshTables &tables, DataStore& store,
+               FindManager& find_manager, AbstractUITask* ui)
     : BaseChatMesh(radio, *new ArduinoMillis(), rng, rtc, *new StaticPoolPacketManager(16), tables),
-      _serial(NULL), telemetry(MAX_PACKET_PAYLOAD - 4), _store(&store), _ui(ui), _iter(0) {
+      _serial(NULL), telemetry(MAX_PACKET_PAYLOAD - 4), _store(&store), _ui(ui), _find_manager(&find_manager), _iter(0) {
+  _find_manager->setListener(this);
   _iter_started = false;
   _cli_rescue = false;
   offline_queue_len = 0;
@@ -1039,6 +1047,8 @@ void MyMesh::handleCmdFrame(size_t len) {
     i += 20;
     out_frame[i++] = _prefs.isRepeatEn() ? 1 : 0;   // v9+
     out_frame[i++] = _prefs.path_hash_mode;  // v10+
+    out_frame[i++] = _find_manager->isSupported() ? DEVICE_CAP_FIND : 0; // v11+ capability bitmask
+    out_frame[i++] = _find_manager->isActive() ? 1 : 0;
     _serial->writeFrame(out_frame, i);
   } else if (cmd_frame[0] == CMD_APP_START &&
              len >= 8) { // sent when app establishes connection, respond with node ID
@@ -2007,10 +2017,28 @@ void MyMesh::handleCmdFrame(size_t len) {
     } else {
       writeErrFrame(ERR_CODE_TABLE_FULL);
     }
+  } else if (cmd_frame[0] == CMD_TRIGGER_FIND) {
+    if (_find_manager->start()) {
+      writeOKFrame();
+    } else {
+      writeErrFrame(ERR_CODE_UNSUPPORTED_CMD);
+    }
+  } else if (cmd_frame[0] == CMD_STOP_FIND) {
+    if (_find_manager->stop()) {
+      writeOKFrame();
+    } else {
+      writeErrFrame(ERR_CODE_UNSUPPORTED_CMD);
+    }
   } else {
     writeErrFrame(ERR_CODE_UNSUPPORTED_CMD);
     MESH_DEBUG_PRINTLN("ERROR: unknown command: %02X", cmd_frame[0]);
   }
+}
+
+void MyMesh::onFindStateChanged(bool active) {
+  if (!_serial) return;
+  uint8_t frame[] = {PUSH_CODE_FIND_STATE, active ? (uint8_t)1 : (uint8_t)0};
+  _serial->writeFrame(frame, sizeof(frame));
 }
 
 static bool save_filter(const ContactInfo& c) {
@@ -2263,5 +2291,5 @@ bool MyMesh::advert() {
 
 // To check if there is pending work
 bool MyMesh::hasPendingWork() const {
-  return _mgr->getOutboundTotal() > 0 || dirty_contacts_expiry != 0;
+  return _mgr->getOutboundTotal() > 0 || dirty_contacts_expiry != 0 || _find_manager->isActive();
 }

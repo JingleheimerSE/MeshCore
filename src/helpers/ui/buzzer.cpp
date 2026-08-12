@@ -33,6 +33,15 @@ bool genericBuzzer::isPlaying() {
 }
 
 void genericBuzzer::loop() {
+    if (_find_active) {
+        if (rtttl::done()) {
+            rtttl::begin(PIN_BUZZER, find_song); // repeat until FindManager calls stopFind()
+        } else {
+            rtttl::play();
+        }
+        return;
+    }
+
     if (!rtttl::done()) rtttl::play();
 }
 
@@ -57,6 +66,31 @@ void genericBuzzer::quiet(bool buzzer_state) {
 
 bool genericBuzzer::isQuiet() {
     return _is_quiet;
+}
+
+void genericBuzzer::startFind() {
+    if (isPlaying()) {
+        rtttl::stop();
+    }
+
+    // Find must be audible even if the device is muted -- a muted lost
+    // device would otherwise be unfindable. Bypass quiet mode for the
+    // duration and restore it in stopFind().
+    if (!_find_active) {
+        _find_prev_quiet = _is_quiet;
+    }
+    quiet(false);
+
+    _find_active = true;
+    rtttl::begin(PIN_BUZZER, find_song);
+}
+
+void genericBuzzer::stopFind() {
+    if (!_find_active) return;
+
+    rtttl::stop();
+    _find_active = false;
+    quiet(_find_prev_quiet);
 }
 
 #endif  // ifdef PIN_BUZZER

@@ -3,6 +3,7 @@
 #ifdef PIN_VIBRATION
 
 #include <Arduino.h>
+#include "FindManager.h"
 
 /*
  * Vibration motor control class
@@ -18,16 +19,20 @@
 #define VIBRATION_TIMEOUT 5000 // 5 seconds default
 #endif
 
-class GenericVibration {
+class GenericVibration : public FindOutput {
 public:
   void begin();       // set up vibration pin
   void trigger();     // trigger vibration if cooldown has passed
-  void loop();        // non-blocking timer handling
+  void loop() override; // non-blocking timer handling
   bool isVibrating(); // returns true if currently vibrating
   void stop();        // stop vibration immediately
+  void startFind() override;
+  void stopFind() override;
 
 private:
-  unsigned long duration;
+  uint32_t duration = 0;
+  bool _find_active = false;
+  uint32_t _find_phase_origin = 0;
 };
 
 #endif // ifdef PIN_VIBRATION

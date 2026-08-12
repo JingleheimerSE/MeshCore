@@ -12,25 +12,14 @@
   #define LED_STATE_ON 1
 #endif
 
-#ifdef PIN_BUZZER
-  #include <helpers/ui/buzzer.h>
-#endif
-#ifdef PIN_VIBRATION
-  #include <helpers/ui/GenericVibration.h>
-#endif
-
 #include "../AbstractUITask.h"
+#include "../DeviceAlerts.h"
 #include "../NodePrefs.h"
 
 class UITask : public AbstractUITask {
+  DeviceAlerts* _alerts;
   DisplayDriver* _display;
   SensorManager* _sensors;
-#ifdef PIN_BUZZER
-  genericBuzzer buzzer;
-#endif
-#ifdef PIN_VIBRATION
-  GenericVibration vibration;
-#endif
   unsigned long _next_refresh, _auto_off;
   NodePrefs* _node_prefs;
   char _alert[80];
@@ -65,7 +54,8 @@ class UITask : public AbstractUITask {
 
 public:
 
-  UITask(mesh::MainBoard* board, MultiSerialInterface* serial) : AbstractUITask(board, serial), _display(NULL), _sensors(NULL) {
+  UITask(mesh::MainBoard* board, MultiSerialInterface* serial, DeviceAlerts* alerts)
+      : AbstractUITask(board, serial), _alerts(alerts), _display(NULL), _sensors(NULL) {
     next_batt_chck = _next_refresh = 0;
     ui_started_at = 0;
     curr = NULL;
@@ -80,7 +70,7 @@ public:
 
   bool isBuzzerQuiet() { 
 #ifdef PIN_BUZZER
-    return buzzer.isQuiet();
+    return _alerts->buzzer().isQuiet();
 #else
     return true;
 #endif
